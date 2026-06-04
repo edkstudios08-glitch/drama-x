@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="google-site-verification" content="VvxLbuNa69I8RuX_JZBe62c64G6Zw5R84J-RY-a3krs" />
+    <title>Drama-X | Microblogging Premium</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #000000;
+            color: #e7e9ea;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .twitter-border { border-color: #2f3336; }
+        .twitter-input { background-color: transparent; outline: none; }
+        .twitter-btn { background-color: #1d9bf0; transition: background 0.2s; }
+        .twitter-btn:hover { background-color: #1a8cd8; }
+        .twitter-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .verified-yellow { color: #facc15; fill: #facc15; }
+        
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); }
+
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: #000; }
+        ::-webkit-scrollbar-thumb { background: #2f3336; border-radius: 10px; }
+
+        .loading-spinner {
+            border: 3px solid rgba(29, 155, 240, 0.1);
+            border-left-color: #1d9bf0;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .status-dot {
+            position: absolute; bottom: -2px; right: -2px;
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            border: 2px solid #000;
+            z-index: 10;
+        }
+        .online { background-color: #22c55e; }
+        .offline { background-color: #ef4444; }
+    </style>
+</head>
+<body class="min-h-screen overflow-hidden">
+
+    <div id="init-screen" class="fixed inset-0 z-[110] bg-black flex flex-col items-center justify-center p-6 text-center">
+        <div class="mb-6">
+            <svg width="60" height="60" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M50 5 L89 27.5 V72.5 L50 95 L11 72.5 V27.5 L50 5Z" stroke="#1d9bf0" stroke-width="4" />
+                <path d="M38 35 H52 C60 35 65 40 65 50 C65 60 60 65 52 65 H38 V35ZM44 41 V59 H50 C55 59 58 56 58 50 C58 44 55 41 50 41 H44Z" fill="#1d9bf0" />
+            </svg>
+        </div>
+        <div class="loading-spinner mb-4" id="init-spinner"></div>
+        <p id="init-status" class="text-gray-500 text-sm font-medium px-4" data-i18n="syncing">Sincronizando datos de forma segura...</p>
+    </div>
+
+    <div id="login-screen" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="modal-overlay absolute inset-0"></div>
+        <div class="relative bg-black border twitter-border w-[95%] sm:w-full max-w-md p-6 sm:p-10 rounded-3xl shadow-2xl">
+            <h2 class="text-2xl font-black text-center mb-2 tracking-tighter" data-i18n="loginTitle">Entrar en Drama-X</h2>
+            <p class="text-gray-500 text-center text-sm mb-8" data-i18n="loginDesc">Conéctate o entra como invitado</p>
+            
+            <div class="space-y-4">
+                <input type="text" id="auth-username" class="w-full bg-black border twitter-border p-3.5 rounded-xl outline-none focus:border-[#1d9bf0]" placeholder="Usuario">
+                <input type="password" id="auth-password" class="w-full bg-black border twitter-border p-3.5 rounded-xl outline-none focus:border-[#1d9bf0]" placeholder="Contraseña">
+                <button id="auth-btn" class="w-full bg-white text-black font-black py-3.5 rounded-full hover:bg-gray-200 transition-all text-sm uppercase shadow-lg" data-i18n="loginBtn">Acceder / Registrarse</button>
+                <button id="skip-login" class="w-full text-[#1d9bf0] text-xs font-bold py-2 hover:underline" data-i18n="loginGuest">Continuar como Invitado (Lector)</button>
+                <p id="auth-error" class="text-red-500 text-xs text-center hidden pt-2"></p>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-profile-modal" class="hidden fixed inset-0 z-[150] flex items-center justify-center p-4">
+        <div class="modal-overlay absolute inset-0" onclick="closeEditModal()"></div>
+        <div class="relative bg-black border twitter-border w-[95%] sm:w-full max-w-md p-6 rounded-2xl shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold" data-i18n="editProfileTitle">Editar perfil</h2>
+                <button onclick="closeEditModal()"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1" data-i18n="profilePhoto">Foto de perfil</label>
+                    <input type="file" id="edit-avatar-file" accept="image/*" class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-[#1d9bf0] file:text-white hover:file:bg-[#1a8cd8]">
+                    <img id="edit-avatar-preview" class="hidden w-16 h-16 rounded-full object-cover mt-3 border twitter-border">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1" data-i18n="displayNameLabel">Nombre para mostrar</label>
+                    <input type="text" id="edit-display-name" class="w-full bg-transparent border twitter-border p-3 rounded-lg outline-none focus:border-[#1d9bf0] text-sm text-white" placeholder="Ej. El Drama King">
+                </div>
+                <div>
+                    <label class="block text-xs text-gray-500 mb-1" data-i18n="bioLabel">Biografía</label>
+                    <textarea id="edit-bio" class="w-full bg-transparent border twitter-border p-3 rounded-lg outline-none focus:border-[#1d9bf0] text-sm h-24 resize-none" placeholder="Escribe algo sobre ti..."></textarea>
+                </div>
+                <button id="save-profile-btn" class="w-full bg-white text-black font-bold py-3 rounded-full" data-i18n="saveChanges">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="reply-modal" class="hidden fixed inset-0 z-[160] flex items-center justify-center p-4 sm:p-6">
+        <div class="modal-overlay absolute inset-0" onclick="closeReplyModal()"></div>
+        <div class="relative bg-black border twitter-border w-[95%] sm:w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center p-4 border-b twitter-border">
+                <h2 class="text-lg font-bold" data-i18n="replyTitle">Comentarios</h2>
+                <button onclick="closeReplyModal()"><i data-lucide="x" class="w-6 h-6 text-gray-400 hover:text-white transition"></i></button>
+            </div>
+            <div id="reply-original-post" class="p-4 border-b twitter-border bg-white/[0.02] overflow-y-auto max-h-60"></div>
+            <div id="reply-list" class="flex-grow overflow-y-auto p-4 space-y-4"></div>
+            <div class="p-4 border-t twitter-border bg-black">
+                <div class="flex gap-3">
+                    <div id="reply-my-avatar-container" class="w-10 h-10 flex-shrink-0 relative"></div>
+                    <div class="flex-grow">
+                        <textarea id="reply-input" class="w-full twitter-input text-sm py-2 resize-none h-12" placeholder="Postea tu respuesta..."></textarea>
+                        <div class="flex justify-end mt-2">
+                            <button id="send-reply-btn" class="twitter-btn px-5 py-1.5 rounded-full font-bold text-white text-xs uppercase" data-i18n="replyBtn">Responder</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-app" class="hidden w-full sm:max-w-2xl mx-auto flex flex-col h-screen sm:border-x twitter-border bg-black relative">
+        
+        <header class="sticky top-0 z-50 bg-black/80 backdrop-blur-md border-b twitter-border p-4">
+            <div class="flex justify-between items-center mb-4">
+                <div class="flex items-center gap-2 cursor-pointer" onclick="showView('home')">
+                    <svg width="24" height="24" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 sm:w-8 sm:h-8">
+                        <path d="M25 15H50C75 15 75 85 50 85H25V15Z" stroke="white" stroke-width="8" stroke-linejoin="round"/>
+                        <path d="M20 20L80 80M80 20L20 80" stroke="#1d9bf0" stroke-width="8" stroke-linecap="round"/>
+                    </svg>
+                    <h1 class="hidden sm:block text-xl font-black italic tracking-tighter">DRAMA-X</h1>
+                </div>
+                
+                <div class="flex items-center gap-1 sm:gap-2">
+                    <button onclick="showView('messages')" title="Mensajes" class="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors relative">
+                        <i data-lucide="mail" class="w-5 h-5"></i>
+                        <span id="unread-badge" class="hidden absolute top-1 right-1 w-2.5 h-2.5 bg-[#1d9bf0] rounded-full border-2 border-black"></span>
+                    </button>
+                    <button onclick="window.toggleLanguage()" title="Cambiar Idioma" class="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-full transition-colors flex items-center gap-1">
+                        <i data-lucide="globe" class="w-5 h-5"></i> <span id="current-lang-text" class="text-xs font-bold uppercase">ES</span>
+                    </button>
+                    <div class="flex items-center gap-2 bg-white/5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border twitter-border cursor-pointer hover:bg-white/10 transition-colors" onclick="openMyProfile()">
+                        <div id="header-avatar-container" class="w-6 h-6 flex-shrink-0 relative"></div>
+                        <span id="display-name" class="text-[11px] font-black uppercase tracking-tight truncate max-w-[80px] sm:max-w-none">...</span>
+                        <span id="my-badge" class="flex items-center gap-1"></span>
+                    </div>
+                    <button onclick="window.logout()" title="Cerrar sesión" class="p-2 text-gray-500 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-colors">
+                        <i data-lucide="log-out" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="relative w-full">
+                <input type="text" id="search-input" placeholder="Buscar usuarios..." class="w-full bg-[#202327] border-none p-2.5 pl-10 rounded-full text-sm twitter-input focus:ring-1 focus:ring-[#1d9bf0]">
+                <i data-lucide="search" class="w-4 h-4 text-gray-500 absolute left-3.5 top-3"></i>
+                <div id="search-results" class="hidden absolute top-full left-0 w-full mt-2 bg-black border twitter-border rounded-2xl shadow-2xl z-[60] overflow-hidden"></div>
+            </div>
+        </header>
+
+        <div class="flex-grow overflow-y-auto relative pb-safe">
+            
+            <div id="view-home" class="flex flex-col min-h-full">
+                <div class="p-4 border-b twitter-border flex gap-4">
+                    <div id="post-avatar-container" class="w-12 h-12 flex-shrink-0 relative cursor-pointer" onclick="openMyProfile()"></div>
+                    
+                    <div class="flex-grow">
+                        <textarea id="tweet-input" class="w-full twitter-input text-lg py-2 resize-none h-16" maxlength="280"></textarea>
+                        <div id="post-img-preview-container" class="hidden relative mt-2 w-full">
+                            <img id="post-img-preview" class="rounded-xl w-full max-h-64 object-cover border twitter-border">
+                            <button onclick="window.clearPostImage()" class="absolute top-2 right-2 bg-black/60 p-1.5 rounded-full hover:bg-black transition">
+                                <i data-lucide="x" class="w-4 h-4 text-white"></i>
+                            </button>
+                        </div>
+                        <div class="flex justify-between items-center pt-3 border-t twitter-border mt-2">
+                            <div class="flex gap-2 text-[#1d9bf0]">
+                                <input type="file" id="post-img-input" accept="image/*" class="hidden">
+                                <button onclick="document.getElementById('post-img-input').click()" class="hover:bg-blue-900/30 p-2 rounded-full" title="Añadir imagen"><i data-lucide="image" class="w-5 h-5"></i></button>
+                                <button onclick="window.dummyAction('añadir emojis')" class="hover:bg-blue-900/30 p-2 rounded-full"><i data-lucide="smile" class="w-5 h-5"></i></button>
+                            </div>
+                            <button id="send-btn" class="twitter-btn px-6 py-2 rounded-full font-black text-white text-xs uppercase shadow-xl" data-i18n="postBtn">Postear</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-4 bg-gradient-to-r from-blue-900/10 to-transparent border-b twitter-border flex flex-col sm:flex-row items-center justify-between gap-4 text-center sm:text-left">
+                    <div class="flex items-center gap-4">
+                        <div class="p-2 bg-yellow-500/20 rounded-full"><i data-lucide="award" class="text-yellow-500 w-5 h-5"></i></div>
+                        <div>
+                            <p class="text-[12px] font-black text-white uppercase tracking-tight text-yellow-500" data-i18n="getVerified">¿Quieres el Verificado?</p>
+                            <p class="text-[10px] text-gray-400" data-i18n="verifiedDesc">0.20€ y el propietario verificará tu cuenta.</p>
+                        </div>
+                    </div>
+                    <a href="https://paypal.me/edkgamesr/0.20" target="_blank" class="w-full sm:w-auto bg-[#facc15] text-black text-[10px] font-black px-4 py-2 rounded-full hover:scale-105 transition-transform uppercase whitespace-nowrap" data-i18n="payBtn">Pagar 0.20€</a>
+                </div>
+
+                <div id="feed" class="flex flex-col flex-grow">
+                    <div class="p-10 sm:p-20 flex justify-center"><div class="loading-spinner"></div></div>
+                </div>
+            </div>
+
+            <div id="view-profile" class="hidden flex flex-col min-h-full pb-20">
+                <div class="flex items-center gap-6 p-3 sticky top-0 bg-black/80 backdrop-blur-md z-10 border-b twitter-border">
+                    <button onclick="showView('home')" class="p-2 hover:bg-white/10 rounded-full"><i data-lucide="arrow-left"></i></button>
+                    <div class="flex flex-col">
+                        <h2 class="text-xl font-bold flex items-center gap-1" id="profile-title-name">Perfil</h2>
+                        <span class="text-xs text-gray-500" id="profile-post-count">0 posts</span>
+                    </div>
+                </div>
+                
+                <div class="h-32 bg-gray-800 relative"></div>
+                
+                <div class="px-4 relative mb-4">
+                    <div class="absolute -top-16 left-4 border-4 border-black rounded-full">
+                        <div id="profile-view-avatar-container" class="w-32 h-32 flex-shrink-0 relative"></div>
+                    </div>
+                    
+                    <div class="flex justify-end pt-3 h-14 gap-2">
+                        <div id="admin-controls" class="hidden flex gap-2"></div>
+                        <div id="owner-controls" class="hidden flex gap-2"></div>
+                        <button id="profile-edit-btn" onclick="openEditModal()" class="hidden border border-gray-500 rounded-full px-4 py-1.5 font-bold text-sm hover:bg-white/10" data-i18n="editProfileBtn">Editar perfil</button>
+                        <button id="profile-dm-btn" class="hidden border border-gray-500 rounded-full p-2 hover:bg-white/10 transition-colors" title="Enviar Mensaje"><i data-lucide="mail" class="w-5 h-5"></i></button>
+                        <button id="profile-follow-btn" onclick="window.toggleFollowProfile()" class="hidden border rounded-full px-4 py-1.5 font-bold text-sm transition-colors"></button>
+                    </div>
+                    
+                    <div class="mt-2">
+                        <h1 class="text-2xl font-black flex items-center gap-1 break-words">
+                            <span id="profile-view-name"></span>
+                            <span id="profile-view-badges" class="flex items-center gap-1"></span>
+                        </h1>
+                        <p class="text-gray-500 text-sm">@<span id="profile-view-handle"></span></p>
+                    </div>
+
+                    <div id="founder-banner" class="hidden mt-3 bg-gradient-to-r from-[#facc15]/20 to-transparent border-l-4 border-[#facc15] p-3 rounded-r-lg">
+                        <p class="text-[#facc15] text-sm font-black flex items-center gap-2">
+                            <i data-lucide="crown" class="w-5 h-5"></i> <span data-i18n="founderTag">Fundador y propietario de Drama-X</span>
+                        </p>
+                    </div>
+
+                    <div id="admin-banner" class="hidden mt-3 bg-gradient-to-r from-red-500/20 to-transparent border-l-4 border-red-500 p-3 rounded-r-lg">
+                        <p class="text-red-500 text-sm font-black flex items-center gap-2">
+                            <i data-lucide="shield" class="w-5 h-5"></i> <span data-i18n="adminTag">Administrador Oficial</span>
+                        </p>
+                    </div>
+                    
+                    <p class="mt-4 text-[14px] leading-relaxed break-words" id="profile-view-bio"></p>
+                    
+                    <div class="flex gap-4 mt-4 text-sm text-gray-500">
+                        <p><span class="font-bold text-white" id="profile-following-count">0</span> <span data-i18n="following">Siguiendo</span></p>
+                        <p><span class="font-bold text-white" id="profile-followers-count">0</span> <span data-i18n="followers">Seguidores</span></p>
+                    </div>
+                </div>
+
+                <div class="border-b twitter-border flex">
+                    <div class="flex-1 text-center font-bold py-4 border-b-4 border-[#1d9bf0]" data-i18n="tabPosts">Posts</div>
+                    <div class="flex-1 text-center font-bold py-4 text-gray-500" data-i18n="tabReplies">Respuestas</div>
+                    <div class="flex-1 text-center font-bold py-4 text-gray-500" data-i18n="tabLikes">Me gusta</div>
+                </div>
+                
+                <div id="profile-feed" class="flex flex-col flex-grow">
+                    <div class="p-10 sm:p-20 flex justify-center"><div class="loading-spinner"></div></div>
+                </div>
+            </div>
+
+            <div id="view-messages" class="hidden flex flex-col min-h-full bg-black">
+                <div class="flex items-center gap-6 p-4 sticky top-0 bg-black/80 backdrop-blur-md z-10 border-b twitter-border">
+                    <button onclick="showView('home')" class="p-2 hover:bg-white/10 rounded-full"><i data-lucide="arrow-left"></i></button>
+                    <h2 class="text-xl font-bold" data-i18n="messagesTitle">Mensajes Privados</h2>
+                </div>
+                <div id="messages-list" class="flex flex-col flex-grow">
+                    <div class="p-10 text-center text-gray-500 text-sm" data-i18n="noMessages">No tienes mensajes aún. Ve al perfil de un usuario para iniciar un chat.</div>
+                </div>
+            </div>
+
+            <div id="view-chat" class="hidden flex flex-col h-full bg-black relative">
+                <div class="flex items-center gap-4 p-3 sticky top-0 bg-black/90 backdrop-blur-md z-10 border-b twitter-border">
+                    <button onclick="showView('messages')" class="p-2 hover:bg-white/10 rounded-full"><i data-lucide="arrow-left"></i></button>
+                    <div class="flex items-center gap-3 cursor-pointer" onclick="window.openProfile(activeChatUser)">
+                        <div id="chat-header-avatar-container" class="w-8 h-8 flex-shrink-0 relative"></div>
+                        <div>
+                            <h2 class="text-md font-bold leading-tight flex items-center gap-1">
+                                <span id="chat-header-name"></span>
+                                <span id="chat-header-badges" class="flex items-center"></span>
+                            </h2>
+                            <p class="text-xs text-gray-500">@<span id="chat-header-handle"></span></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="chat-messages-container" class="flex-grow overflow-y-auto p-4 flex flex-col gap-3 pb-32">
+                    </div>
+
+                <div id="chat-extras-popup" class="hidden absolute bottom-16 left-2 right-2 bg-[#202327] border twitter-border rounded-xl p-3 shadow-2xl z-20">
+                    <div class="flex border-b twitter-border mb-2 pb-1">
+                        <button onclick="window.switchChatExtraTab('emojis')" id="tab-emojis" class="flex-1 text-center text-sm font-bold text-white border-b-2 border-[#1d9bf0]">Emojis</button>
+                        <button onclick="window.switchChatExtraTab('stickers')" id="tab-stickers" class="flex-1 text-center text-sm font-bold text-gray-500 border-b-2 border-transparent">Stickers</button>
+                    </div>
+                    <div id="content-emojis" class="grid grid-cols-6 gap-2 text-2xl h-32 overflow-y-auto content-start">
+                        </div>
+                    <div id="content-stickers" class="hidden grid grid-cols-3 gap-2 h-32 overflow-y-auto content-start">
+                        </div>
+                </div>
+
+                <div class="absolute bottom-0 left-0 w-full p-3 bg-black border-t twitter-border z-30">
+                    <div class="flex items-center gap-2 bg-[#202327] rounded-full px-4 py-2 relative">
+                        <button onclick="window.toggleChatExtras()" class="p-1.5 text-gray-400 hover:text-white transition-colors">
+                            <i data-lucide="smile" class="w-5 h-5"></i>
+                        </button>
+                        <input type="text" id="chat-input" class="flex-grow bg-transparent border-none outline-none text-sm text-white placeholder-gray-500" placeholder="Escribe un mensaje...">
+                        <button id="send-chat-btn" onclick="window.sendPrivateMessage()" class="p-1.5 text-[#1d9bf0] hover:bg-blue-900/30 rounded-full transition-colors">
+                            <i data-lucide="send" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div> </div>
+
+    <script>
+        const manifest = {
+            "name": "Drama-X",
+            "short_name": "Drama-X",
+            "start_url": ".",
+            "display": "standalone",
+            "background_color": "#000000",
+            "theme_color": "#000000",
+            "icons": [{"src": "data:image/svg+xml;utf8,<svg viewBox='0 0 100 100' fill='none' xmlns='http://www.w3.org/2000/svg'><path d='M25 15H50C75 15 75 85 50 85H25V15Z' stroke='white' stroke-width='8' stroke-linejoin='round'/><path d='M20 20L80 80M80 20L20 80' stroke='%231d9bf0' stroke-width='8' stroke-linecap='round'/></svg>", "sizes": "192x192", "type": "image/svg+xml"}]
+        };
+        const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+        document.head.insertAdjacentHTML('beforeend', `<link rel="manifest" href="${URL.createObjectURL(manifestBlob)}">`);
+    </script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, setDoc, getDoc, getDocs, updateDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/12.13.0/firebase-firestore.js";
+
+        // --- CONFIGURACIÓN FIREBASE EXACTA ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyA6hcHQSvAJht8t1sstniAej31BTddXPqw",
+            authDomain: "dramaspend-live.firebaseapp.com",
+            projectId: "dramaspend-live",
+            storageBucket: "dramaspend-live.firebasestorage.app",
+            messagingSenderId: "712792104830",
+            appId: "1:712792104830:web:77319698f23c1836289d2f"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        const appId = 'drama-x-prod';
+
+        const ADMIN_USER = "eldramaking";
+        const ADMIN_PASS = "EDKgamesr";
+
+        // Badges HTML
+        const DRAMA_ICON_YELLOW = `
+            <span class="inline-flex items-center justify-center align-middle ml-1 flex-shrink-0" style="width: 14px; height: 14px; min-width: 14px; min-height: 14px;">
+                <svg viewBox="0 0 100 100" fill="none" class="verified-yellow w-full h-full block">
+                    <path d="M50 5 L89 27.5 V72.5 L50 95 L11 72.5 V27.5 L50 5Z" stroke="currentColor" stroke-width="6" />
+                    <path d="M50 15 L80 32.5 V67.5 L50 85 L20 67.5 V32.5 L50 15Z" stroke="currentColor" stroke-width="4" />
+                    <path d="M38 35 H52 C60 35 65 40 65 50 C65 60 60 65 52 65 H38 V35ZM44 41 V59 H50 C55 59 58 56 58 50 C58 44 55 41 50 41 H44Z" fill="currentColor" />
+                </svg>
+            </span>`;
+        const VERIFIED_BADGE = `
+            <span role="presentation" class="inline-flex items-center justify-center align-middle ml-1 flex-shrink-0" style="width: 14px; height: 14px; min-width: 14px; min-height: 14px; background-color: #0066ff; border-radius: 20%; transform: rotate(-12deg); padding: 2px; box-sizing: border-box;" title="Verificado">
+                <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" class="w-full h-full block">
+                    <path d="M 20,52 L 42,74 L 82,26" fill="none" stroke="#ffffff" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </span>`;
+        const PREMIUM_BADGE = `
+            <span role="presentation" class="inline-flex items-center justify-center align-middle ml-1 flex-shrink-0" style="width: 14px; height: 14px; min-width: 14px; min-height: 14px; box-sizing: border-box; color: #facc15;" title="Premium">
+                <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full block">
+                    <path d="M50 5 L89 27.5 V72.5 L50 95 L11 72.5 V27.5 L50 5Z" stroke="currentColor" stroke-width="4" />
+                    <path d="M50 15 L80 32.5 V67.5 L50 85 L20 67.5 V32.5 L50 15Z" stroke="currentColor" stroke-width="3" />
+                    <path d="M38 35 H52 C60 35 65 40 65 50 C65 60 60 65 52 65 H38 V35ZM44 41 V59 H50 C55 59 58 56 58 50 C58 44 55 41 50 41 H44Z" fill="currentColor" />
+                </svg>
+            </span>`;
+        const ADMIN_BADGE_RED = `
+            <span role="presentation" class="inline-flex items-center justify-center align-middle ml-1 flex-shrink-0" style="width: 14px; height: 14px; min-width: 14px; min-height: 14px; box-sizing: border-box; color: #ef4444;" title="Admin Oficial">
+                <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full block">
+                    <path d="M50 5 L89 27.5 V72.5 L50 95 L11 72.5 V27.5 L50 5Z" stroke="currentColor" stroke-width="4" />
+                    <path d="M50 15 L80 32.5 V67.5 L50 85 L20 67.5 V32.5 L50 15Z" stroke="currentColor" stroke-width="3" />
+                    <path d="M38 35 H52 C60 35 65 40 65 50 C65 60 60 65 52 65 H38 V35ZM44 41 V59 H50 C55 59 58 56 58 50 C58 44 55 41 50 41 H44Z" fill="currentColor" />
+                </svg>
+            </span>`;
+
+        let currentUserData = null;
+        let allUsersCache = {};
+        let allTweetsCache = [];
+        let allChatsCache = [];
+        
+        let currentProfileView = null;
+        let activeChatId = null;
+        let activeChatUser = null;
+        let currentActiveView = 'home';
+        
+        let pendingPostImageBase64 = null;
+        let activeReplyPostId = null;
+        let isAuthReady = false;
+        let heartbeatInterval = null;
+
+        // --- SISTEMA BILINGÜE ---
+        const dict = {
+            es: {
+                syncing: "Sincronizando datos de forma segura...", retry: "Reintentar",
+                loginTitle: "Entrar en Drama-X", loginDesc: "Conéctate o entra como invitado", loginBtn: "Acceder / Registrarse", loginGuest: "Continuar como Invitado (Lector)",
+                editProfileTitle: "Editar perfil", profilePhoto: "Foto de perfil", bioLabel: "Biografía", saveChanges: "Guardar Cambios",
+                postBtn: "Postear", getVerified: "¿Quieres el Verificado?", verifiedDesc: "0.20€ y el propietario verificará tu cuenta.", payBtn: "Pagar 0.20€",
+                editProfileBtn: "Editar perfil", founderTag: "Fundador y propietario de Drama-X", adminTag: "Administrador Oficial",
+                following: "Siguiendo", followers: "Seguidores",
+                tabPosts: "Posts", tabReplies: "Respuestas", tabLikes: "Me gusta",
+                replyTitle: "Comentarios", replyBtn: "Responder",
+                searchInputPlaceholder: "Buscar usuarios...", tweetInputPlaceholder: "¿Qué está pasando?", replyInputPlaceholder: "Postea tu respuesta...", chatInputPlaceholder: "Escribe un mensaje...",
+                guestAlert: "Debes iniciar sesión o registrarte para realizar esta acción.", emptyFeed: "La red está en silencio. Sé el primero en publicar.",
+                noBio: "Este usuario aún no ha escrito una biografía.", grantVerify: "Otorgar Verificado", revokeVerify: "Quitar Verificado", followBtn: "Seguir", followingBtn: "Siguiendo",
+                displayNameLabel: "Nombre para mostrar", grantPremium: "Otorgar Premium", revokePremium: "Quitar Premium", grantAdmin: "Otorgar Admin", revokeAdmin: "Quitar Admin",
+                messagesTitle: "Mensajes Privados", noMessages: "No tienes mensajes aún. Ve al perfil de un usuario para iniciar un chat.", translateMsg: "Traducir"
+            },
+            en: {
+                syncing: "Syncing data securely...", retry: "Retry",
+                loginTitle: "Join Drama-X", loginDesc: "Log in or enter as a guest", loginBtn: "Log In / Sign Up", loginGuest: "Continue as Guest (Reader)",
+                editProfileTitle: "Edit Profile", profilePhoto: "Profile Photo", bioLabel: "Bio", saveChanges: "Save Changes",
+                postBtn: "Post", getVerified: "Get Verified?", verifiedDesc: "€0.20 and the owner will verify your account.", payBtn: "Pay €0.20",
+                editProfileBtn: "Edit profile", founderTag: "Founder and owner of Drama-X", adminTag: "Official Administrator",
+                following: "Following", followers: "Followers",
+                tabPosts: "Posts", tabReplies: "Replies", tabLikes: "Likes",
+                replyTitle: "Comments", replyBtn: "Reply",
+                searchInputPlaceholder: "Search users...", tweetInputPlaceholder: "What's happening?", replyInputPlaceholder: "Post your reply...", chatInputPlaceholder: "Write a message...",
+                guestAlert: "You must log in or sign up to perform this action.", emptyFeed: "The network is silent. Be the first to post.",
+                noBio: "This user hasn't written a bio yet.", grantVerify: "Grant Verified", revokeVerify: "Revoke Verified", followBtn: "Follow", followingBtn: "Following",
+                displayNameLabel: "Display Name", grantPremium: "Grant Premium", revokePremium: "Revoke Premium", grantAdmin: "Grant Admin", revokeAdmin: "Revoke Admin",
+                messagesTitle: "Private Messages", noMessages: "No messages yet. Go to a user's profile to start a chat.", translateMsg: "Translate"
+            }
+        };
+
+        let currentLang = 'es';
+        window.toggleLanguage = () => {
+            currentLang = currentLang === 'es' ? 'en' : 'es';
+            document.getElementById('current-lang-text').innerText = currentLang;
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (dict[currentLang][key]) el.innerHTML = dict[currentLang][key];
+            });
+            document.getElementById('search-input').placeholder = dict[currentLang].searchInputPlaceholder;
+            document.getElementById('tweet-input').placeholder = dict[currentLang].tweetInputPlaceholder;
+            document.getElementById('reply-input').placeholder = dict[currentLang].replyInputPlaceholder;
+            document.getElementById('chat-input').placeholder = dict[currentLang].chatInputPlaceholder;
+            if (!document.getElementById('main-app').classList.contains('hidden')) {
+                renderFeed(allTweetsCache, 'feed');
+                if(currentProfileView) openProfile(currentProfileView);
+                if(currentActiveView === 'messages') renderMessagesList();
+                if(currentActiveView === 'chat') {
+                    const currentChat = allChatsCache.find(c => c.id === activeChatId);
+                    renderChatMessages(currentChat ? currentChat.messages : []);
+                }
+            }
+        };
+
+        const t = (key) => dict[currentLang][key] || key;
+        const isGuest = () => { return currentUserData && currentUserData.username.startsWith('guest_'); };
+        const isOwner = (u) => u && u.username === ADMIN_USER;
+        const isAdmin = (u) => u && (u.username === ADMIN_USER || u.role === 'admin');
+
+        const getBadges = (u) => {
+            if (!u) return '';
+            let b = '';
+            if (isOwner(u)) {
+                b += `${DRAMA_ICON_YELLOW} ${VERIFIED_BADGE} ${PREMIUM_BADGE}`;
+            } else if (u.role === 'admin') {
+                b += `${VERIFIED_BADGE} ${ADMIN_BADGE_RED}`;
+            } else {
+                if (u.isVerified) b += VERIFIED_BADGE;
+                if (u.isPremium) b += PREMIUM_BADGE;
+            }
+            return b;
+        };
+
+        const renderAvatarWithStatus = (username, sizeClasses, isClickable = false) => {
+            const u = allUsersCache[username] || { username: username };
+            const isOnline = u.lastActive && (Date.now() - u.lastActive < 120000); // 2 min threshold
+            const dotClass = isOnline ? 'online' : 'offline';
+            const imgHTML = u.avatarBase64 ? `<img src="${u.avatarBase64}" class="w-full h-full object-cover">` : `<div class="w-full h-full flex items-center justify-center font-bold text-white bg-gray-800">${username.charAt(0).toUpperCase()}</div>`;
+            return `
+                <div class="w-full h-full rounded-full overflow-hidden border twitter-border ${isClickable ? 'cursor-pointer' : ''}">${imgHTML}</div>
+                ${!username.startsWith('guest_') ? `<div class="status-dot ${dotClass}" title="${isOnline ? 'Online' : 'Offline'}"></div>` : ''}
+            `;
+        };
+
+        const updateAllAvatars = () => {
+            if(!currentUserData) return;
+            document.getElementById('header-avatar-container').innerHTML = renderAvatarWithStatus(currentUserData.username, 'w-6 h-6');
+            document.getElementById('post-avatar-container').innerHTML = renderAvatarWithStatus(currentUserData.username, 'w-12 h-12', true);
+            document.getElementById('reply-my-avatar-container').innerHTML = renderAvatarWithStatus(currentUserData.username, 'w-10 h-10');
+            
+            const visibleName = currentUserData.displayName || currentUserData.username;
+            document.getElementById('display-name').innerText = (currentUserData.displayName ? "" : "@") + visibleName;
+        };
+
+        // --- PRESENCE SYSTEM (HEARTBEAT) ---
+        const startHeartbeat = () => {
+            if (isGuest()) return;
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            
+            const ping = async () => {
+                try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', currentUserData.username), { lastActive: Date.now() }); } catch(e){}
+            };
+            ping(); // First ping
+            heartbeatInterval = setInterval(ping, 60000); // Every 1 min
+        };
+
+
+        // --- ARRANQUE DIRECTO Y AUTO-LOGIN ---
+        window._checkReadyState = async () => {
+            if (isAuthReady) {
+                const savedUser = localStorage.getItem('drama_x_user');
+                
+                if (savedUser) {
+                    if (savedUser.startsWith('guest_')) {
+                        launch({ username: savedUser, role: 'user', isVerified: false, isPremium: false, bio: "", avatarBase64: "", displayName: "" }, true);
+                        return;
+                    } else {
+                        try {
+                            const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', savedUser);
+                            const snap = await getDoc(userRef);
+                            if (snap.exists()) {
+                                launch(snap.data(), true);
+                                return;
+                            }
+                        } catch(e) { console.error("Auto-login fallback:", e); }
+                    }
+                }
+                document.getElementById('init-screen').classList.add('hidden');
+                document.getElementById('login-screen').classList.remove('hidden');
+                window.toggleLanguage(); window.toggleLanguage();
+                lucide.createIcons();
+            }
+        };
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) { 
+                isAuthReady = true; 
+                window._checkReadyState(); 
+            }
+        });
+
+        const start = async () => {
+            try {
+                await signInAnonymously(auth);
+            } catch (e) {
+                document.getElementById('init-status').innerHTML = "⚠️ <b>ERROR DE FIREBASE</b>";
+                document.getElementById('init-status').classList.replace('text-gray-500', 'text-red-500');
+                document.getElementById('init-spinner').classList.add('hidden');
+            }
+        };
+        start();
+
+        const handleAuth = async () => {
+            if (!auth.currentUser) return;
+            const user = document.getElementById('auth-username').value.trim().toLowerCase();
+            const pass = document.getElementById('auth-password').value;
+            const errorEl = document.getElementById('auth-error');
+            errorEl.classList.add('hidden');
+
+            if (!user || !pass) { errorEl.innerText = "Campos requeridos"; errorEl.classList.remove('hidden'); return; }
+            if (user === ADMIN_USER && pass !== ADMIN_PASS) { errorEl.innerText = "Acceso denegado a cuenta maestra"; errorEl.classList.remove('hidden'); return; }
+
+            try {
+                const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', user);
+                const snap = await getDoc(userRef);
+
+                if (snap.exists()) {
+                    if (snap.data().password === pass) launch(snap.data());
+                    else { errorEl.innerText = "Credenciales inválidas"; errorEl.classList.remove('hidden'); }
+                } else {
+                    const newUser = {
+                        username: user, password: pass, role: (user === ADMIN_USER) ? 'owner' : 'user', isVerified: false, isPremium: false,
+                        createdAt: Date.now(), bio: "", avatarBase64: "", displayName: "", lastActive: Date.now()
+                    };
+                    await setDoc(userRef, newUser);
+                    launch(newUser);
+                }
+            } catch (err) { 
+                errorEl.innerText = "Error de conexión con la Base de Datos."; errorEl.classList.remove('hidden'); 
+            }
+        };
+
+        document.getElementById('auth-btn').addEventListener('click', handleAuth);
+        
+        document.getElementById('skip-login').addEventListener('click', () => {
+            let guestId = localStorage.getItem('drama_x_guest');
+            if(!guestId) { 
+                guestId = Math.random().toString(36).substring(2, 8).toLowerCase(); 
+                localStorage.setItem('drama_x_guest', guestId); 
+            }
+            launch({ username: `guest_${guestId}`, role: 'user', isVerified: false, isPremium: false, bio: "", avatarBase64: "", displayName: "" });
+        });
+
+        window.logout = () => {
+            if (heartbeatInterval) clearInterval(heartbeatInterval);
+            currentUserData = null;
+            localStorage.removeItem('drama_x_user'); 
+            document.getElementById('main-app').classList.add('hidden');
+            document.getElementById('init-screen').classList.add('hidden');
+            document.getElementById('login-screen').classList.remove('hidden');
+            document.getElementById('auth-password').value = '';
+        };
+
+        const launch = (data, isAutoLogin = false) => {
+            currentUserData = data;
+            if (!isAutoLogin) localStorage.setItem('drama_x_user', data.username);
+
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('init-screen').classList.add('hidden');
+            document.getElementById('main-app').classList.remove('hidden');
+            
+            document.getElementById('my-badge').innerHTML = getBadges(currentUserData);
+            document.getElementById('my-badge').classList.remove('hidden');
+
+            startHeartbeat();
+            setupRealtimeData();
+        };
+
+        window.showView = (viewName) => {
+            ['home', 'profile', 'messages', 'chat'].forEach(v => {
+                document.getElementById(`view-${v}`).classList.add('hidden');
+            });
+            document.getElementById(`view-${viewName}`).classList.remove('hidden');
+            currentActiveView = viewName;
+            
+            if (viewName === 'messages') {
+                renderMessagesList();
+                document.getElementById('unread-badge').classList.add('hidden');
+            }
+        };
+
+        window.openMyProfile = () => openProfile(currentUserData.username);
+
+        // --- SUBIDA IMAGEN POST ---
+        document.getElementById('post-img-input').addEventListener('change', (e) => {
+            if(isGuest()) { alert(t('guestAlert')); return; }
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                pendingPostImageBase64 = ev.target.result;
+                document.getElementById('post-img-preview').src = pendingPostImageBase64;
+                document.getElementById('post-img-preview-container').classList.remove('hidden');
+            };
+            reader.readAsDataURL(file);
+        });
+
+        window.clearPostImage = () => {
+            pendingPostImageBase64 = null;
+            document.getElementById('post-img-preview-container').classList.add('hidden');
+            document.getElementById('post-img-input').value = '';
+        };
+
+        window.dummyAction = (action) => {
+            if (isGuest()) { alert(t('guestAlert')); return; }
+            alert(`Acción: ${action} en desarrollo.`);
+        };
+
+        // --- TRADUCCIÓN UNIVERSAL ---
+        window.translateNode = async (btn, text, idKey) => {
+            const originalText = btn.innerText;
+            btn.innerText = "...";
+            try {
+                // Traducción simplificada detectando el idioma actual de la UI para elegir destino
+                const targetLang = currentLang === 'es' ? 'es' : 'en'; 
+                // Para que la traducción sea siempre al contrario si ya está en ese idioma,
+                // MyMemory lo maneja automáticamente o podemos forzar un par autodetect|target
+                const res = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=autodetect|${targetLang}`);
+                const data = await res.json();
+                
+                let translated = data.responseData.translatedText;
+                if(data.responseData.match < 0.5) translated = text; // Fallback
+
+                const container = btn.parentElement.parentElement;
+                let tDiv = container.querySelector(`.t-box-${idKey}`);
+                
+                if(!tDiv) {
+                    tDiv = document.createElement('div');
+                    tDiv.className = `t-box-${idKey} text-sm text-gray-400 mt-2 border-l-2 border-gray-600 pl-2 italic`;
+                    container.insertBefore(tDiv, btn.parentElement);
+                }
+                
+                if (tDiv.innerText === translated) {
+                    tDiv.remove(); // Toggle off
+                } else {
+                    tDiv.innerText = translated;
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                btn.innerText = originalText;
+            }
+        };
+
+        // --- LIKES Y REPLIES ---
+        window.toggleLike = async (tweetId) => {
+            if (isGuest()) { alert(t('guestAlert')); return; }
+            const tweet = allTweetsCache.find(t => t.id === tweetId);
+            if (!tweet || !auth.currentUser) return;
+            const uid = auth.currentUser.uid;
+            let likes = tweet.likes || [];
+            if (likes.includes(uid)) likes = likes.filter(id => id !== uid);
+            else likes.push(uid);
+            try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'messages', tweetId), { likes }); } catch (e) {}
+        };
+
+        window.openReplyModal = (postId) => {
+            activeReplyPostId = postId;
+            const foundTweet = allTweetsCache.find(t => t.id === postId);
+            if(!foundTweet) return;
+
+            const uData = allUsersCache[foundTweet.user] || { username: foundTweet.user };
+            const tweetDisplay = uData.displayName || uData.username;
+            
+            document.getElementById('reply-original-post').innerHTML = `
+                <div class="flex gap-3">
+                    <div class="w-10 h-10 flex-shrink-0 relative">${renderAvatarWithStatus(foundTweet.user, 'w-10 h-10')}</div>
+                    <div class="flex-grow min-w-0">
+                        <div class="flex items-center gap-1">
+                            <span class="font-bold text-white">${escapeHTML(tweetDisplay)}</span> 
+                            ${getBadges(uData)}
+                            <span class="text-gray-500 text-xs ml-1">@${uData.username}</span>
+                        </div>
+                        <p class="text-sm mt-1 text-gray-200 whitespace-pre-wrap break-words">${escapeHTML(foundTweet.content)}</p>
+                        ${foundTweet.image ? `<img src="${foundTweet.image}" class="mt-2 rounded-xl max-h-40 w-auto object-cover border twitter-border">` : ''}
+                    </div>
+                </div>
+            `;
+
+            const repliesContainer = document.getElementById('reply-list');
+            repliesContainer.innerHTML = '';
+            const replies = foundTweet.replies || [];
+            if(replies.length === 0) repliesContainer.innerHTML = `<p class="text-xs text-gray-500 text-center py-4">Sin comentarios.</p>`;
+            else {
+                replies.forEach((r, idx) => {
+                    const rUser = allUsersCache[r.user] || { username: r.user };
+                    const rTime = new Date(r.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    const replyDisplay = rUser.displayName || rUser.username;
+                    
+                    const div = document.createElement('div');
+                    div.className = "flex gap-3";
+                    div.innerHTML = `
+                        <div class="w-8 h-8 flex-shrink-0 relative mt-1">${renderAvatarWithStatus(r.user, 'w-8 h-8')}</div>
+                        <div class="flex-grow bg-white/5 p-3 rounded-2xl rounded-tl-none min-w-0">
+                            <div class="flex items-center gap-1 mb-1">
+                                <span class="font-bold text-white text-xs">${escapeHTML(replyDisplay)}</span> 
+                                ${getBadges(rUser)}
+                                <span class="text-gray-500 text-[10px]">@${rUser.username} · ${rTime}</span>
+                            </div>
+                            <p class="text-sm text-gray-200 whitespace-pre-wrap break-words">${escapeHTML(r.content)}</p>
+                            <div class="mt-2 flex justify-end">
+                                <button onclick="window.translateNode(this, '${escapeHTML(r.content)}', 'reply-${idx}')" class="text-[10px] text-[#1d9bf0] hover:underline flex items-center gap-1"><i data-lucide="languages" class="w-3 h-3"></i> ${t('translateMsg')}</button>
+                            </div>
+                        </div>
+                    `;
+                    repliesContainer.appendChild(div);
+                });
+            }
+            lucide.createIcons();
+            document.getElementById('reply-modal').classList.remove('hidden');
+        };
+
+        window.closeReplyModal = () => { document.getElementById('reply-modal').classList.add('hidden'); activeReplyPostId = null; };
+
+        document.getElementById('send-reply-btn').addEventListener('click', async () => {
+            if(isGuest()) { alert(t('guestAlert')); return; }
+            const input = document.getElementById('reply-input');
+            if(!input.value.trim() || !activeReplyPostId) return;
+
+            document.getElementById('send-reply-btn').disabled = true;
+            try {
+                const tweet = allTweetsCache.find(t => t.id === activeReplyPostId);
+                const newReply = { user: currentUserData.username, content: input.value.trim(), timestamp: Date.now() };
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'messages', activeReplyPostId), { replies: [...(tweet.replies || []), newReply] });
+                input.value = '';
+                setTimeout(() => window.openReplyModal(activeReplyPostId), 300);
+            } catch(e) {} finally { document.getElementById('send-reply-btn').disabled = false; }
+        });
+
+        // --- REALTIME ---
+        const setupRealtimeData = () => {
+            if (!auth.currentUser) return;
+            
+            // Usuarios
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'users'), (snap) => {
+                allUsersCache = {};
+                snap.forEach(d => allUsersCache[d.id] = d.data());
+                updateAllAvatars();
+                if(currentProfileView && allUsersCache[currentProfileView]) renderProfileInfo(allUsersCache[currentProfileView]);
+                renderFeed(allTweetsCache, 'feed'); 
+                if(currentActiveView === 'messages') renderMessagesList();
+                if(currentActiveView === 'chat') {
+                    document.getElementById('chat-header-avatar-container').innerHTML = renderAvatarWithStatus(activeChatUser, 'w-8 h-8');
+                }
+            });
+
+            // Posts Globales
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), (snap) => {
+                allTweetsCache = [];
+                snap.forEach(d => allTweetsCache.push({ id: d.id, ...d.data() }));
+                allTweetsCache.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                
+                renderFeed(allTweetsCache, 'feed');
+                if (currentProfileView) {
+                    const userTweets = allTweetsCache.filter(t => t.user === currentProfileView);
+                    renderFeed(userTweets, 'profile-feed');
+                    document.getElementById('profile-post-count').innerText = `${userTweets.length} posts`;
+                }
+                if(activeReplyPostId) window.openReplyModal(activeReplyPostId);
+            });
+
+            // Chats Privados
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'chats'), (snap) => {
+                allChatsCache = [];
+                snap.forEach(d => allChatsCache.push({ id: d.id, ...d.data() }));
+
+                const myChats = allChatsCache.filter(c => c.participants && c.participants.includes(currentUserData.username));
+
+                // Notificación visual (Badge)
+                let hasUnread = false;
+                myChats.forEach(c => {
+                    const msgs = c.messages || [];
+                    const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+                    if (lastMsg && lastMsg.sender !== currentUserData.username && lastMsg.timestamp > (currentUserData.lastActive || 0)) {
+                        if (currentActiveView !== 'chat' || activeChatId !== c.id) hasUnread = true;
+                    }
+                });
+                if (hasUnread && currentActiveView !== 'messages' && currentActiveView !== 'chat') {
+                    document.getElementById('unread-badge').classList.remove('hidden');
+                }
+
+                if (currentActiveView === 'messages') renderMessagesList();
+                if (currentActiveView === 'chat' && activeChatId) {
+                    const currentChat = myChats.find(c => c.id === activeChatId);
+                    renderChatMessages(currentChat ? currentChat.messages : []);
+                }
+            });
+        };
+
+        const renderFeed = (tweets, containerId) => {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            if (tweets.length === 0) {
+                container.innerHTML = `<div class="p-10 text-center text-gray-600 text-sm">${t('emptyFeed')}</div>`;
+                return;
+            }
+
+            const currentUid = auth.currentUser ? auth.currentUser.uid : null;
+
+            tweets.forEach(twt => {
+                const uData = allUsersCache[twt.user] || { username: twt.user, role: 'user', isVerified: false, isPremium: false, displayName: "" };
+                const timeStr = twt.timestamp ? new Date(twt.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Ahora';
+                
+                const likesCount = twt.likes ? twt.likes.length : 0;
+                const isLiked = twt.likes && currentUid && twt.likes.includes(currentUid);
+                const heartClass = isLiked ? 'text-pink-500 hover:text-pink-600' : 'text-gray-500 hover:text-pink-400';
+                const heartFill = isLiked ? 'fill-current' : 'none';
+                const replyCount = twt.replies ? twt.replies.length : 0;
+                const imgHTML = twt.image ? `<div class="mt-3"><img src="${twt.image}" class="rounded-2xl max-h-80 w-full object-cover border twitter-border"></div>` : '';
+
+                const card = document.createElement('div');
+                card.className = 'p-4 border-b twitter-border flex gap-3 hover:bg-white/[0.02] transition-all cursor-pointer';
+                card.onclick = (e) => { if(!e.target.closest('button') && !e.target.closest('img')) openProfile(uData.username); };
+                
+                const dispName = uData.displayName || uData.username;
+                const handleTag = uData.displayName ? `@${uData.username}` : "";
+
+                card.innerHTML = `
+                    <div class="w-10 h-10 flex-shrink-0 relative">${renderAvatarWithStatus(twt.user, 'w-10 h-10')}</div>
+                    <div class="flex-grow min-w-0">
+                        <div class="flex items-center gap-1 mb-1 flex-wrap">
+                            <span class="font-bold text-white hover:underline truncate">${escapeHTML(dispName)}</span>
+                            ${getBadges(uData)}
+                            <span class="text-gray-600 text-xs ml-1">${handleTag ? escapeHTML(handleTag) + ' · ' : ''}${timeStr}</span>
+                        </div>
+                        <p class="text-[15px] text-gray-200 break-words whitespace-pre-wrap">${escapeHTML(twt.content)}</p>
+                        ${imgHTML}
+                        <div class="mt-1 flex">
+                            <button onclick="window.translateNode(this, '${escapeHTML(twt.content)}', '${twt.id}')" class="text-[10px] text-[#1d9bf0] hover:underline flex items-center gap-1"><i data-lucide="languages" class="w-3 h-3"></i> ${t('translateMsg')}</button>
+                        </div>
+                        <div class="flex justify-between mt-3 max-w-sm">
+                            <button onclick="window.openReplyModal('${twt.id}')" class="text-gray-500 hover:text-blue-400 flex items-center gap-1.5 group transition-colors"><i data-lucide="message-circle" class="w-4 h-4"></i><span class="text-[10px] font-bold">${replyCount}</span></button>
+                            <button onclick="window.dummyAction('reenviar')" class="text-gray-500 hover:text-green-400 flex items-center gap-1.5 group transition-colors"><i data-lucide="repeat" class="w-4 h-4"></i><span class="text-[10px] font-bold">0</span></button>
+                            <button onclick="window.toggleLike('${twt.id}')" class="${heartClass} flex items-center gap-1.5 group transition-colors"><i data-lucide="heart" class="w-4 h-4" fill="${heartFill}"></i><span class="text-[10px] font-bold">${likesCount}</span></button>
+                            <button onclick="window.dummyAction('compartir')" class="text-gray-500 hover:text-blue-400 transition-colors"><i data-lucide="share" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            lucide.createIcons();
+        };
+
+        const escapeHTML = (str) => { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; };
+
+        // --- SISTEMA DE MENSAJES PRIVADOS ---
+        window.openChatWith = (targetUsername) => {
+            const arr = [currentUserData.username, targetUsername].sort();
+            activeChatId = `${arr[0]}_${arr[1]}`;
+            activeChatUser = targetUsername;
+
+            const uData = allUsersCache[targetUsername] || { username: targetUsername };
+            document.getElementById('chat-header-name').innerText = uData.displayName || uData.username;
+            document.getElementById('chat-header-handle').innerText = uData.username;
+            document.getElementById('chat-header-badges').innerHTML = getBadges(uData);
+            document.getElementById('chat-header-avatar-container').innerHTML = renderAvatarWithStatus(targetUsername, 'w-8 h-8');
+
+            showView('chat');
+            const currentChat = allChatsCache.find(c => c.id === activeChatId);
+            renderChatMessages(currentChat ? currentChat.messages : []);
+            document.getElementById('chat-extras-popup').classList.add('hidden'); // Close extras
+        };
+
+        const renderMessagesList = () => {
+            const container = document.getElementById('messages-list');
+            const myChats = allChatsCache.filter(c => c.participants && c.participants.includes(currentUserData.username));
+            myChats.sort((a, b) => (b.lastUpdated || 0) - (a.lastUpdated || 0));
+
+            container.innerHTML = '';
+            if (myChats.length === 0) {
+                container.innerHTML = `<div class="p-10 text-center text-gray-500 text-sm">${t('noMessages')}</div>`;
+                return;
+            }
+
+            myChats.forEach(chat => {
+                const otherUser = chat.participants.find(p => p !== currentUserData.username);
+                const uData = allUsersCache[otherUser] || { username: otherUser };
+                const dispName = uData.displayName || uData.username;
+                const msgs = chat.messages || [];
+                const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+                const isImage = lastMsg && lastMsg.image;
+                const lastText = lastMsg ? (lastMsg.sender === currentUserData.username ? "Tú: " : "") + (isImage ? "[Sticker]" : lastMsg.text) : '';
+                const timeStr = lastMsg ? new Date(lastMsg.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+
+                const div = document.createElement('div');
+                div.className = "flex items-center gap-3 p-4 border-b twitter-border hover:bg-white/5 cursor-pointer transition-colors";
+                div.onclick = () => window.openChatWith(otherUser);
+                div.innerHTML = `
+                    <div class="w-12 h-12 flex-shrink-0 relative">${renderAvatarWithStatus(otherUser, 'w-12 h-12')}</div>
+                    <div class="flex-grow min-w-0">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="font-bold text-white truncate flex items-center gap-1">${escapeHTML(dispName)} ${getBadges(uData)}</span>
+                            <span class="text-xs text-gray-500 flex-shrink-0 ml-2">${timeStr}</span>
+                        </div>
+                        <p class="text-sm text-gray-400 truncate">${escapeHTML(lastText)}</p>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+        };
+
+        const renderChatMessages = (messages) => {
+            const container = document.getElementById('chat-messages-container');
+            container.innerHTML = '';
+            
+            if (messages.length === 0) {
+                container.innerHTML = `<div class="text-center text-gray-500 text-xs mt-10">Inicia la conversación</div>`;
+                return;
+            }
+
+            messages.forEach((m, idx) => {
+                const isMe = m.sender === currentUserData.username;
+                const div = document.createElement('div');
+                div.className = `flex w-full ${isMe ? 'justify-end' : 'justify-start'}`;
+                
+                let contentHTML = '';
+                if (m.image) {
+                    contentHTML = `<img src="${m.image}" class="rounded-xl max-w-xs max-h-40 object-contain bg-black/20">`;
+                } else {
+                    contentHTML = `<p class="break-words whitespace-pre-wrap">${escapeHTML(m.text)}</p>`;
+                    if (!isMe) {
+                        contentHTML += `
+                            <div class="mt-1 flex justify-end border-t border-white/10 pt-1">
+                                <button onclick="window.translateNode(this, '${escapeHTML(m.text)}', 'chatmsg-${idx}')" class="text-[10px] text-white/70 hover:text-white flex items-center gap-1"><i data-lucide="languages" class="w-3 h-3"></i> ${t('translateMsg')}</button>
+                            </div>
+                        `;
+                    }
+                }
+
+                div.innerHTML = `
+                    <div class="max-w-[75%] rounded-2xl px-4 py-2 text-[15px] shadow-sm ${isMe ? 'bg-[#1d9bf0] text-white rounded-br-sm' : 'bg-[#2f3336] text-white rounded-bl-sm'}">
+                        ${contentHTML}
+                        <p class="text-[9px] opacity-70 ${isMe ? 'text-right' : 'text-left'} mt-1">${new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+            lucide.createIcons();
+            // Auto scroll al final
+            setTimeout(() => { container.scrollTop = container.scrollHeight; }, 10);
+        };
+
+        window.sendPrivateMessage = async (overrideText = null, imageUrl = null) => {
+            if (isGuest()) return alert(t('guestAlert'));
+            const input = document.getElementById('chat-input');
+            const text = overrideText !== null ? overrideText : input.value.trim();
+            
+            if (!text && !imageUrl) return;
+            if (!activeChatId) return;
+
+            document.getElementById('send-chat-btn').disabled = true;
+            try {
+                const chatRef = doc(db, 'artifacts', appId, 'public', 'data', 'chats', activeChatId);
+                const newMessage = { sender: currentUserData.username, text: text, timestamp: Date.now() };
+                if (imageUrl) newMessage.image = imageUrl;
+
+                const chatSnap = await getDoc(chatRef);
+                if (chatSnap.exists()) {
+                    await updateDoc(chatRef, { messages: arrayUnion(newMessage), lastUpdated: Date.now() });
+                } else {
+                    const participants = activeChatId.split('_');
+                    await setDoc(chatRef, { participants, messages: [newMessage], lastUpdated: Date.now() });
+                }
+                if(overrideText === null) input.value = '';
+                document.getElementById('chat-extras-popup').classList.add('hidden');
+            } catch(e) {
+                console.error("Error al enviar DM", e);
+            } finally {
+                document.getElementById('send-chat-btn').disabled = false;
+                if(overrideText === null) input.focus(); 
+            }
+        };
+
+        document.getElementById('chat-input').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                window.sendPrivateMessage();
+            }
+        });
+
+        // --- EXTRAS DE CHAT (Emojis & Stickers) ---
+        const emojisList = ['😀','😂','🥺','😍','😎','😭','😡','👍','🔥','✨','❤️','🎉','💔','👀','💀','🤡','👋','🙌'];
+        const stickersList = [
+            'https://media.giphy.com/media/26AHONQ79FdWZhAI0/giphy.gif',
+            'https://media.giphy.com/media/3o7TKSjRrfIPjeiVyM/giphy.gif',
+            'https://media.giphy.com/media/l41YkxvU8c7J7Bba0/giphy.gif',
+            'https://media.giphy.com/media/3o6Zt481isNVuQI1l6/giphy.gif',
+            'https://media.giphy.com/media/xT0xeJpnrWC4XWblWQ/giphy.gif',
+            'https://media.giphy.com/media/B3nATT4FPvHKg/giphy.gif'
+        ];
+
+        const initChatExtras = () => {
+            const elContainer = document.getElementById('content-emojis');
+            emojisList.forEach(emoji => {
+                const btn = document.createElement('button');
+                btn.className = 'hover:bg-white/10 rounded-lg p-2 transition-colors';
+                btn.innerText = emoji;
+                btn.onclick = () => {
+                    const input = document.getElementById('chat-input');
+                    input.value += emoji;
+                };
+                elContainer.appendChild(btn);
+            });
+
+            const stContainer = document.getElementById('content-stickers');
+            stickersList.forEach(url => {
+                const btn = document.createElement('button');
+                btn.className = 'hover:bg-white/10 rounded-lg p-1 transition-colors';
+                btn.innerHTML = `<img src="${url}" class="w-full h-16 object-cover rounded-md">`;
+                btn.onclick = () => window.sendPrivateMessage('', url);
+                stContainer.appendChild(btn);
+            });
+        };
+        initChatExtras();
+
+        window.toggleChatExtras = () => {
+            const popup = document.getElementById('chat-extras-popup');
+            popup.classList.toggle('hidden');
+        };
+
+        window.switchChatExtraTab = (tab) => {
+            if (tab === 'emojis') {
+                document.getElementById('content-emojis').classList.remove('hidden');
+                document.getElementById('content-stickers').classList.add('hidden');
+                document.getElementById('tab-emojis').classList.replace('text-gray-500', 'text-white');
+                document.getElementById('tab-emojis').classList.replace('border-transparent', 'border-[#1d9bf0]');
+                document.getElementById('tab-stickers').classList.replace('text-white', 'text-gray-500');
+                document.getElementById('tab-stickers').classList.replace('border-[#1d9bf0]', 'border-transparent');
+            } else {
+                document.getElementById('content-stickers').classList.remove('hidden');
+                document.getElementById('content-emojis').classList.add('hidden');
+                document.getElementById('tab-stickers').classList.replace('text-gray-500', 'text-white');
+                document.getElementById('tab-stickers').classList.replace('border-transparent', 'border-[#1d9bf0]');
+                document.getElementById('tab-emojis').classList.replace('text-white', 'text-gray-500');
+                document.getElementById('tab-emojis').classList.replace('border-[#1d9bf0]', 'border-transparent');
+            }
+        };
+
+        // --- PERFIL Y SEGUIDORES ---
+        window.openProfile = (username) => {
+            currentProfileView = username;
+            let userData = allUsersCache[username] || { username: username, role: 'user', isVerified: false, isPremium: false, bio: "", displayName: "" };
+            renderProfileInfo(userData);
+            const userTweets = allTweetsCache.filter(t => t.user === username);
+            renderFeed(userTweets, 'profile-feed');
+            document.getElementById('profile-post-count').innerText = `${userTweets.length} posts`;
+            showView('profile');
+        };
+
+        const renderProfileInfo = (u) => {
+            const profileDisplay = u.displayName || u.username;
+            document.getElementById('profile-title-name').innerText = profileDisplay;
+            document.getElementById('profile-view-name').innerText = profileDisplay;
+            document.getElementById('profile-view-handle').innerText = u.username;
+            document.getElementById('profile-view-bio').innerText = u.bio || t('noBio');
+            document.getElementById('profile-view-badges').innerHTML = getBadges(u);
+            
+            document.getElementById('profile-view-avatar-container').innerHTML = renderAvatarWithStatus(u.username, 'w-32 h-32');
+
+            // Banners de Roles
+            if (isOwner(u)) {
+                document.getElementById('founder-banner').classList.remove('hidden');
+                document.getElementById('admin-banner').classList.add('hidden');
+            } else if (u.role === 'admin') {
+                document.getElementById('founder-banner').classList.add('hidden');
+                document.getElementById('admin-banner').classList.remove('hidden');
+            } else {
+                document.getElementById('founder-banner').classList.add('hidden');
+                document.getElementById('admin-banner').classList.add('hidden');
+            }
+
+            const editBtn = document.getElementById('profile-edit-btn');
+            const adminControls = document.getElementById('admin-controls');
+            const ownerControls = document.getElementById('owner-controls');
+            const followBtn = document.getElementById('profile-follow-btn');
+            const dmBtn = document.getElementById('profile-dm-btn');
+
+            if (currentUserData.username === u.username && !isGuest()) {
+                editBtn.classList.remove('hidden'); followBtn.classList.add('hidden'); dmBtn.classList.add('hidden');
+            } else {
+                editBtn.classList.add('hidden');
+                
+                // Botón DM
+                if (!u.username.startsWith('guest_') && !isGuest()) {
+                    dmBtn.classList.remove('hidden');
+                    dmBtn.onclick = () => window.openChatWith(u.username);
+                } else {
+                    dmBtn.classList.add('hidden');
+                }
+
+                // Botón Seguir
+                if (!u.username.startsWith('guest_') && !isGuest()) {
+                    followBtn.classList.remove('hidden');
+                    const isFollowing = u.followers && u.followers.includes(currentUserData.username);
+                    if (isFollowing) {
+                        followBtn.innerText = t('followingBtn');
+                        followBtn.className = "border border-gray-500 text-white rounded-full px-4 py-1.5 font-bold text-sm hover:bg-red-500/10 hover:text-red-500 hover:border-red-500 transition-colors w-32";
+                        followBtn.onmouseenter = () => followBtn.innerText = currentLang === 'es' ? 'Dejar de seguir' : 'Unfollow';
+                        followBtn.onmouseleave = () => followBtn.innerText = t('followingBtn');
+                    } else {
+                        followBtn.innerText = t('followBtn');
+                        followBtn.className = "bg-white text-black rounded-full px-4 py-1.5 font-bold text-sm hover:bg-gray-200 transition-colors w-32";
+                        followBtn.onmouseenter = null; followBtn.onmouseleave = null;
+                    }
+                } else { followBtn.classList.add('hidden'); }
+            }
+
+            const formatNumberStr = (num) => {
+                if (num >= 1000000000000) return (num / 1000000000000).toFixed(1).replace(/\.0$/, '') + 'T';
+                if (num >= 1000000000) return (num / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+                if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+                if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+                return num.toString();
+            };
+
+            let rawFollowers = u.followerCount !== undefined ? u.followerCount : (u.followers ? u.followers.length : 0);
+            document.getElementById('profile-followers-count').innerText = formatNumberStr(rawFollowers);
+            document.getElementById('profile-following-count').innerText = u.following ? u.following.length : 0;
+
+            // --- CONTROLES DE ADMINISTRACIÓN ---
+            // 1. Owner & Admin controls (Verify, Premium)
+            if (isAdmin(currentUserData) && u.username !== currentUserData.username && !u.username.startsWith('guest_') && !isOwner(u)) {
+                const isPrem = u.isPremium || false;
+                adminControls.innerHTML = `
+                    <div class="flex flex-col gap-1 sm:flex-row sm:gap-2">
+                        <button onclick="window.toggleVerifyUser('${u.username}', ${u.isVerified})" class="border ${u.isVerified ? 'border-red-500 text-red-500 hover:bg-red-500/10' : 'border-[#1d9bf0] text-[#1d9bf0] hover:bg-[#1d9bf0]/10'} rounded-full px-3 py-1 font-bold text-[10px] sm:text-xs transition-colors">
+                            ${u.isVerified ? t('revokeVerify') : t('grantVerify')}
+                        </button>
+                        <button onclick="window.togglePremiumUser('${u.username}', ${isPrem})" class="border ${isPrem ? 'border-red-500 text-red-500 hover:bg-red-500/10' : 'border-yellow-500 text-yellow-500 hover:bg-yellow-500/10'} rounded-full px-3 py-1 font-bold text-[10px] sm:text-xs transition-colors">
+                            ${isPrem ? t('revokePremium') : t('grantPremium')}
+                        </button>
+                    </div>
+                `;
+                adminControls.classList.remove('hidden');
+            } else { adminControls.classList.add('hidden'); }
+
+            // 2. ONLY Owner controls (Grant Admin)
+            if (isOwner(currentUserData) && u.username !== currentUserData.username && !u.username.startsWith('guest_')) {
+                const isUserAdmin = u.role === 'admin';
+                ownerControls.innerHTML = `
+                    <button onclick="window.toggleAdminUser('${u.username}', ${isUserAdmin})" class="border ${isUserAdmin ? 'border-red-500 text-red-500 hover:bg-red-500/10' : 'border-purple-500 text-purple-500 hover:bg-purple-500/10'} rounded-full px-3 py-1 font-bold text-[10px] sm:text-xs transition-colors">
+                        ${isUserAdmin ? t('revokeAdmin') : t('grantAdmin')}
+                    </button>
+                `;
+                ownerControls.classList.remove('hidden');
+            } else { ownerControls.classList.add('hidden'); }
+        };
+
+        window.toggleVerifyUser = async (targetUser, currentStatus) => {
+            if (!isAdmin(currentUserData)) return;
+            try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', targetUser), { isVerified: !currentStatus }); } catch (e) {}
+        };
+
+        window.togglePremiumUser = async (targetUser, currentStatus) => {
+            if (!isAdmin(currentUserData)) return;
+            try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', targetUser), { isPremium: !currentStatus }); } catch (e) {}
+        };
+
+        window.toggleAdminUser = async (targetUser, currentStatus) => {
+            if (!isOwner(currentUserData)) return; // SOLO el dueño puede dar Admin
+            try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', targetUser), { role: currentStatus ? 'user' : 'admin' }); } catch (e) {}
+        };
+
+        window.toggleFollowProfile = async () => {
+            if (isGuest()) { alert(t('guestAlert')); return; }
+            if (!currentProfileView || currentProfileView === currentUserData.username) return;
+
+            const targetUser = allUsersCache[currentProfileView];
+            if (!targetUser) return;
+            document.getElementById('profile-follow-btn').disabled = true;
+
+            const isFollowing = targetUser.followers && targetUser.followers.includes(currentUserData.username);
+            const myRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', currentUserData.username);
+            const targetRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', currentProfileView);
+
+            try {
+                if (isFollowing) {
+                    await updateDoc(targetRef, { followers: arrayRemove(currentUserData.username) });
+                    await updateDoc(myRef, { following: arrayRemove(currentProfileView) });
+                } else {
+                    await updateDoc(targetRef, { followers: arrayUnion(currentUserData.username) });
+                    await updateDoc(myRef, { following: arrayUnion(currentProfileView) });
+                }
+            } catch (e) {} finally { document.getElementById('profile-follow-btn').disabled = false; }
+        };
+
+        // --- EDICIÓN ---
+        window.openEditModal = () => {
+            document.getElementById('edit-display-name').value = currentUserData.displayName || "";
+            document.getElementById('edit-bio').value = currentUserData.bio || "";
+            document.getElementById('edit-profile-modal').classList.remove('hidden');
+        };
+        window.closeEditModal = () => { document.getElementById('edit-profile-modal').classList.add('hidden'); };
+
+        let pendingAvatarBase64 = null;
+        document.getElementById('edit-avatar-file').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const r = new FileReader();
+            r.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = 200; canvas.height = 200;
+                    const size = Math.min(img.width, img.height);
+                    const x = (img.width - size) / 2;
+                    const y = (img.height - size) / 2;
+                    ctx.drawImage(img, x, y, size, size, 0, 0, 200, 200);
+                    pendingAvatarBase64 = canvas.toDataURL('image/jpeg', 0.8);
+                    document.getElementById('edit-avatar-preview').src = pendingAvatarBase64; 
+                    document.getElementById('edit-avatar-preview').classList.remove('hidden');
+                };
+                img.src = ev.target.result;
+            };
+            r.readAsDataURL(file);
+        });
+
+        document.getElementById('save-profile-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('save-profile-btn');
+            btn.disabled = true;
+            const originalText = btn.innerText;
+            btn.innerText = "Guardando...";
+
+            const updates = { 
+                displayName: document.getElementById('edit-display-name').value.trim(),
+                bio: document.getElementById('edit-bio').value 
+            };
+            if (pendingAvatarBase64) updates.avatarBase64 = pendingAvatarBase64;
+            
+            try {
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'users', currentUserData.username), updates, { merge: true });
+                currentUserData = { ...currentUserData, ...updates };
+                updateAllAvatars();
+                openProfile(currentUserData.username);
+                closeEditModal();
+                pendingAvatarBase64 = null;
+            } catch(e) {
+                alert("Error de conexión al guardar el perfil. " + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
+            }
+        });
+
+        // --- BUSCADOR ---
+        const searchInput = document.getElementById('search-input');
+        const resultsBox = document.getElementById('search-results');
+        searchInput.addEventListener('input', (e) => {
+            const q = e.target.value.toLowerCase().trim();
+            if (!q) { resultsBox.classList.add('hidden'); return; }
+
+            const filtered = Object.values(allUsersCache).filter(u => u.username.includes(q) && !u.username.startsWith('guest_'));
+            resultsBox.innerHTML = '';
+            
+            if (filtered.length > 0) {
+                resultsBox.classList.remove('hidden');
+                filtered.forEach(u => {
+                    const dispName = u.displayName || u.username;
+                    const handleStr = u.displayName ? `@${u.username}` : '';
+                    const div = document.createElement('div');
+                    div.className = 'p-3 flex items-center justify-between border-b twitter-border hover:bg-white/10 cursor-pointer';
+                    div.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 flex-shrink-0 relative">${renderAvatarWithStatus(u.username, 'w-8 h-8')}</div>
+                            <div class="flex flex-col">
+                                <span class="font-bold text-white text-sm flex items-center gap-1">
+                                    ${escapeHTML(dispName)} ${getBadges(u)}
+                                </span>
+                                ${handleStr ? `<span class="text-xs text-gray-500">${escapeHTML(handleStr)}</span>` : ''}
+                            </div>
+                        </div>
+                    `;
+                    div.onclick = () => { searchInput.value = ''; resultsBox.classList.add('hidden'); openProfile(u.username); };
+                    resultsBox.appendChild(div);
+                });
+            } else {
+                resultsBox.innerHTML = '<div class="p-4 text-center text-xs text-gray-500">Sin resultados</div>';
+                resultsBox.classList.remove('hidden');
+            }
+        });
+        document.addEventListener('click', (e) => { if (!resultsBox.contains(e.target)) resultsBox.classList.add('hidden'); });
+
+        // --- POSTEAR ---
+        const send = async () => {
+            if (isGuest()) { alert(t('guestAlert')); return; }
+            const input = document.getElementById('tweet-input');
+            const content = input.value.trim();
+            if (!content && !pendingPostImageBase64) return;
+            
+            document.getElementById('send-btn').disabled = true;
+
+            const postData = {
+                user: currentUserData.username, content: content, timestamp: Date.now(), 
+                uid: auth.currentUser.uid, likes: [], replies: []
+            };
+            if (pendingPostImageBase64) postData.image = pendingPostImageBase64;
+
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'messages'), postData);
+                input.value = ''; window.clearPostImage();
+            } catch (e) {} finally { document.getElementById('send-btn').disabled = false; }
+        };
+
+        document.getElementById('send-btn').addEventListener('click', send);
+        document.getElementById('tweet-input').addEventListener('keydown', (e) => { if (e.ctrlKey && e.key === 'Enter') send(); });
+
+    </script>
+</body>
+</html>
