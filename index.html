@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="google-site-verification" content="VvxLbuNa69I8RuX_JZBe62c64G6Zw5R84J-RY-a3krs" />
+    <meta name="google-site-verification" content="-BuuHIt5gYWpwLdi0AWEC6bEY4VTsL6HUJ4fopZFlys" />
     <title>Drama-X | Microblogging Premium</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
@@ -1155,7 +1155,7 @@
                 // Botón Seguir
                 if (!u.username.startsWith('guest_') && !isGuest()) {
                     followBtn.classList.remove('hidden');
-                    const isFollowing = u.followers && u.followers.includes(currentUserData.username);
+                    const isFollowing = targetUser.followers && targetUser.followers.includes(currentUserData.username);
                     if (isFollowing) {
                         followBtn.innerText = t('followingBtn');
                         followBtn.className = "border border-gray-500 text-white rounded-full px-4 py-1.5 font-bold text-sm hover:bg-red-500/10 hover:text-red-500 hover:border-red-500 transition-colors w-32";
